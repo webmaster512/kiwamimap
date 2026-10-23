@@ -1,0 +1,589 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="極みすしMAP2026のデジタルパンフレットです。">
+  <title>極みすしMAP2026｜デジタルパンフレット</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      overflow: hidden;
+      background: #eee;
+      color: #333;
+      font-family: "Yu Gothic", "Meiryo", sans-serif;
+    }
+
+    header, footer { display: none; }
+
+    main {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .viewer {
+      position: relative;
+      width: auto;
+      height: calc(100% - 24px);
+      max-width: calc(100vw - 100px);
+      aspect-ratio: 1208 / 1718;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 8px 28px #00000020;
+      overflow: hidden;
+      touch-action: pan-y;
+    }
+
+    .page {
+      display: none;
+      width: 100%;
+      height: 100%;
+    }
+
+    .page.active { display: block; }
+
+    .page img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transform-origin: center center;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .controls { margin: 0; }
+
+    .controls button {
+      position: fixed;
+      z-index: 5;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 56px;
+      height: 76px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #2f855a;
+      font-size: 34px;
+      cursor: pointer;
+    }
+
+    #prevButton { left: 4px; }
+    #nextButton { right: 4px; }
+
+    .controls button:disabled {
+      opacity: .35;
+      cursor: default;
+    }
+
+    #pageNumber {
+      position: fixed;
+      right: 18px;
+      bottom: 16px;
+      z-index: 6;
+      min-width: 96px;
+      padding: 13px 18px;
+      border-radius: 30px;
+      background: #555d;
+      color: white;
+      text-align: center;
+      font-size: 16px;
+    }
+
+    #menuButton {
+      position: fixed;
+      top: 20px;
+      left: 16px;
+      z-index: 20;
+      width: 80px;
+      height: 80px;
+      border: 0;
+      border-radius: 18px;
+      background: white;
+      color: #222;
+      box-shadow: 0 3px 12px #00000025;
+      font-size: 32px;
+      cursor: pointer;
+    }
+
+    #thumbnailPanel {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 30;
+      width: min(320px, 85vw);
+      height: 100%;
+      padding: 24px;
+      overflow-y: auto;
+      background: white;
+      box-shadow: 4px 0 20px #00000025;
+    }
+
+    #thumbnailPanel.open { display: block; }
+
+    #thumbnailPanel h2 { font-size: 20px; }
+
+    #closeMenuButton {
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 8px;
+      background: #eee;
+      cursor: pointer;
+    }
+
+    #thumbnailList {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .thumbnailItem {
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #f8f8f8;
+      color: #333;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .thumbnailItem img {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-bottom: 6px;
+    }
+
+    .thumbnailItem.selected { border: 2px solid #2f855a; }
+
+    #pageDots {
+      position: fixed;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      max-width: 65vw;
+      overflow: hidden;
+      z-index: 8;
+    }
+
+    .pageDot {
+      flex: 0 0 12px;
+      width: 12px;
+      height: 12px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: #c8c8c8;
+      cursor: pointer;
+    }
+
+    .pageDot.active { background: #2f855a; }
+
+    #swipeGuide {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px 24px;
+      border-radius: 32px;
+      background: #333333b8;
+      color: white;
+      font-size: 18px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    .guideHand {
+      display: inline-block;
+      font-size: 30px;
+      animation: handMove 1.2s ease-in-out infinite;
+    }
+
+    @keyframes handMove {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(-12px); }
+    }
+
+    /* ズーム中は画像を移動できる */
+    .viewer.zoomed {
+      overflow: visible;
+      z-index: 15;
+    }
+
+    .viewer.dragging { cursor: grabbing; }
+
+    @media (max-width: 600px) {
+      .viewer {
+        width: calc(100vw - 64px);
+        height: auto;
+        max-width: none;
+        max-height: calc(100dvh - 100px);
+      }
+
+      .page { height: auto; }
+      .page img { height: auto; }
+
+      .controls button { width: 30px; }
+      #prevButton { left: 0; }
+      #nextButton { right: 0; }
+
+      .controls button { font-size: 22px; }
+
+      #menuButton {
+        top: 10px;
+        left: 10px;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        font-size: 24px;
+      }
+
+      #pageNumber {
+        right: 10px;
+        bottom: 10px;
+        min-width: 76px;
+        padding: 9px 12px;
+        font-size: 13px;
+      }
+
+      #pageDots { bottom: 3px; gap: 6px; }
+
+      .pageDot {
+        flex-basis: 8px;
+        width: 8px;
+        height: 8px;
+      }
+
+      #swipeGuide {
+        bottom: 24px;
+        padding: 8px 16px;
+        font-size: 14px;
+      }
+
+      .guideHand { font-size: 24px; }
+    }
+  </style>
+</head>
+
+<body>
+  <button id="menuButton" aria-label="ページ一覧を開く">☰</button>
+
+  <div id="thumbnailPanel">
+    <h2>ページ一覧</h2>
+    <div id="thumbnailList"></div>
+    <button id="closeMenuButton">閉じる</button>
+  </div>
+
+  <main>
+    <div class="viewer" id="viewer">
+      <div id="pageDots" aria-label="ページ一覧"></div>
+
+      <div class="page active">
+        <img src="images/page-0001.jpg" alt="極みすしMAP2026 1ページ目">
+      </div>
+      <div class="page">
+        <img src="images/page-0002.jpg" alt="極みすしMAP2026 2ページ目">
+      </div>
+      <div class="page">
+        <img src="images/page-0003.jpg" alt="極みすしMAP2026 3ページ目">
+      </div>
+      <div class="page">
+        <img src="images/page-0004.jpg" alt="極みすしMAP2026 4ページ目">
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="prevButton" aria-label="前のページ" disabled>❮</button>
+      <span id="pageNumber">1 / 4</span>
+      <button id="nextButton" aria-label="次のページ">❯</button>
+    </div>
+
+    <div id="swipeGuide">
+      <span class="guideHand">👆</span>
+      <span>左へスワイプ</span>
+    </div>
+  </main>
+
+  <script>
+    const pages = [...document.querySelectorAll(".page")];
+    const viewer = document.getElementById("viewer");
+    const pageNumber = document.getElementById("pageNumber");
+    const prevButton = document.getElementById("prevButton");
+    const nextButton = document.getElementById("nextButton");
+    const menuButton = document.getElementById("menuButton");
+    const thumbnailPanel = document.getElementById("thumbnailPanel");
+    const thumbnailList = document.getElementById("thumbnailList");
+    const closeMenuButton = document.getElementById("closeMenuButton");
+    const pageDots = document.getElementById("pageDots");
+    const swipeGuide = document.getElementById("swipeGuide");
+
+    let currentPage = 0;
+    const zoomStates = pages.map(() => ({ scale: 1, x: 0, y: 0 }));
+    let pinchStartDistance = 0;
+    let pinchStartScale = 1;
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let dragOriginX = 0;
+    let dragOriginY = 0;
+
+    function applyZoom() {
+      const state = zoomStates[currentPage];
+      const img = pages[currentPage].querySelector("img");
+      img.style.transform = `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+      viewer.classList.toggle("zoomed", state.scale > 1);
+    }
+
+    function resetZoom() {
+      zoomStates[currentPage] = { scale: 1, x: 0, y: 0 };
+      applyZoom();
+    }
+
+    function showPage(index) {
+      if (index < 0 || index >= pages.length) return;
+      currentPage = index;
+
+      pages.forEach((page, i) => page.classList.toggle("active", i === currentPage));
+      pageNumber.textContent = `${currentPage + 1} / ${pages.length}`;
+      swipeGuide.style.display = currentPage === 0 ? "flex" : "none";
+      prevButton.disabled = currentPage === 0;
+      nextButton.disabled = currentPage === pages.length - 1;
+
+      pageDots.querySelectorAll("button").forEach((dot, i) => {
+        dot.classList.toggle("active", i === currentPage);
+      });
+      document.querySelectorAll(".thumbnailItem").forEach((item, i) => {
+        item.classList.toggle("selected", i === currentPage);
+      });
+
+      applyZoom();
+    }
+
+    pages.forEach((page, index) => {
+      const dot = document.createElement("button");
+      dot.className = "pageDot";
+      dot.setAttribute("aria-label", `ページ${index + 1}へ移動`);
+      dot.addEventListener("click", () => showPage(index));
+      pageDots.appendChild(dot);
+
+      const item = document.createElement("button");
+      item.className = "thumbnailItem";
+      const img = page.querySelector("img").cloneNode();
+      img.alt = `ページ${index + 1}`;
+      const label = document.createElement("span");
+      label.textContent = `ページ ${index + 1}`;
+      item.append(img, label);
+      item.addEventListener("click", () => {
+        showPage(index);
+        thumbnailPanel.classList.remove("open");
+      });
+      thumbnailList.appendChild(item);
+    });
+
+    prevButton.addEventListener("click", () => showPage(currentPage - 1));
+    nextButton.addEventListener("click", () => showPage(currentPage + 1));
+    menuButton.addEventListener("click", () => thumbnailPanel.classList.toggle("open"));
+    closeMenuButton.addEventListener("click", () => thumbnailPanel.classList.remove("open"));
+
+    /* マウスホイールでズーム */
+    viewer.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const state = zoomStates[currentPage];
+      state.scale = Math.max(1, Math.min(4, state.scale * (event.deltaY < 0 ? 1.1 : 0.9)));
+      if (state.scale === 1) {
+        state.x = 0;
+        state.y = 0;
+      }
+      applyZoom();
+    }, { passive: false });
+
+    /* マウスでドラッグ移動 */
+    viewer.addEventListener("pointerdown", (event) => {
+      const state = zoomStates[currentPage];
+      if (state.scale <= 1 || event.pointerType === "touch") return;
+
+      isDragging = true;
+      dragStartX = event.clientX;
+      dragStartY = event.clientY;
+      dragOriginX = state.x;
+      dragOriginY = state.y;
+      viewer.classList.add("dragging");
+      viewer.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+
+    viewer.addEventListener("pointermove", (event) => {
+      if (!isDragging) return;
+      const state = zoomStates[currentPage];
+      state.x = dragOriginX + event.clientX - dragStartX;
+      state.y = dragOriginY + event.clientY - dragStartY;
+      applyZoom();
+    });
+
+    function stopDragging() {
+      isDragging = false;
+      viewer.classList.remove("dragging");
+    }
+
+    viewer.addEventListener("pointerup", stopDragging);
+    viewer.addEventListener("pointercancel", stopDragging);
+
+    function touchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    }
+/* スマートフォンで拡大したページを1本指で移動 */
+let panStartX = 0;
+let panStartY = 0;
+let panOriginX = 0;
+let panOriginY = 0;
+let isPanning = false;
+
+viewer.addEventListener("touchstart", (event) => {
+  const state = zoomStates[currentPage];
+
+  if (event.touches.length !== 1 || state.scale <= 1) {
+    isPanning = false;
+    return;
+  }
+
+  isPanning = true;
+  panStartX = event.touches[0].clientX;
+  panStartY = event.touches[0].clientY;
+  panOriginX = state.x;
+  panOriginY = state.y;
+}, { passive: true });
+
+viewer.addEventListener("touchmove", (event) => {
+  if (!isPanning || event.touches.length !== 1) return;
+
+  event.preventDefault();
+
+  const state = zoomStates[currentPage];
+
+  state.x = panOriginX + event.touches[0].clientX - panStartX;
+  state.y = panOriginY + event.touches[0].clientY - panStartY;
+
+  applyZoom();
+}, { passive: false });
+
+viewer.addEventListener("touchend", () => {
+  isPanning = false;
+}, { passive: true });
+
+viewer.addEventListener("touchcancel", () => {
+  isPanning = false;
+}, { passive: true });
+
+/* ダブルタップでズーム */
+let lastTapTime = 0;
+const doubleTapDelay = 300;
+const doubleTapZoom = 2.5;
+
+viewer.addEventListener("touchend", (event) => {
+  // 2本指操作は対象外
+  if (event.changedTouches.length !== 1) return;
+
+  // 拡大中のドラッグでは反応させない
+  if (isPanning) return;
+
+  const now = Date.now();
+
+  if (now - lastTapTime < doubleTapDelay) {
+    event.preventDefault();
+
+    const state = zoomStates[currentPage];
+
+    if (state.scale > 1) {
+      resetZoom();
+    } else {
+      state.scale = doubleTapZoom;
+      state.x = 0;
+      state.y = 0;
+      applyZoom();
+    }
+
+    lastTapTime = 0;
+    return;
+  }
+
+  lastTapTime = now;
+}, { passive: false });
+    /* 2本指ピンチズーム */
+    viewer.addEventListener("touchstart", (event) => {
+      if (event.touches.length === 2) {
+        pinchStartDistance = touchDistance(event.touches);
+        pinchStartScale = zoomStates[currentPage].scale;
+      }
+    }, { passive: true });
+
+    viewer.addEventListener("touchmove", (event) => {
+      if (event.touches.length !== 2 || !pinchStartDistance) return;
+      event.preventDefault();
+
+      const state = zoomStates[currentPage];
+      state.scale = Math.max(1, Math.min(4,
+        pinchStartScale * touchDistance(event.touches) / pinchStartDistance
+      ));
+      if (state.scale === 1) {
+        state.x = 0;
+        state.y = 0;
+      }
+      applyZoom();
+    }, { passive: false });
+
+    viewer.addEventListener("touchend", (event) => {
+      if (event.touches.length < 2) pinchStartDistance = 0;
+    }, { passive: true });
+
+    /* 1本指スワイプでページ送り */
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    viewer.addEventListener("touchstart", (event) => {
+      if (event.touches.length !== 1) return;
+      touchStartX = event.touches[0].clientX;
+      touchStartY = event.touches[0].clientY;
+    }, { passive: true });
+
+    viewer.addEventListener("touchend", (event) => {
+      if (event.changedTouches.length !== 1) return;
+      if (zoomStates[currentPage].scale > 1) return;
+
+      const dx = event.changedTouches[0].clientX - touchStartX;
+      const dy = event.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+
+      showPage(currentPage + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+
+    showPage(0);
+  </script>
+</body>
+</html>
